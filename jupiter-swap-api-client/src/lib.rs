@@ -5,6 +5,7 @@ use reqwest::{Client, Response};
 use serde::de::DeserializeOwned;
 use swap::{SwapInstructionsResponse, SwapInstructionsResponseInternal, SwapRequest, SwapResponse};
 use thiserror::Error;
+use serde::Deserialize;
 
 pub mod quote;
 pub mod route_plan_with_metadata;
@@ -45,6 +46,11 @@ async fn check_status_code_and_deserialize<T: DeserializeOwned>(
         .json::<T>()
         .await
         .map_err(ClientError::DeserializationError)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HealthResponse {
+    pub status: String,
 }
 
 impl JupiterSwapApiClient {
@@ -91,5 +97,13 @@ impl JupiterSwapApiClient {
         check_status_code_and_deserialize::<SwapInstructionsResponseInternal>(response)
             .await
             .map(Into::into)
+    }
+
+    pub async fn health(&self) -> Result<HealthResponse, ClientError> {
+        let response = Client::new()
+            .get(format!("{}/health", self.base_path))
+            .send()
+            .await?;
+        check_status_code_and_deserialize(response).await
     }
 }
