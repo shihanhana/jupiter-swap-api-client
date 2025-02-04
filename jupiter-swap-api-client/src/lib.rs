@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use swap::{SwapInstructionsResponse, SwapInstructionsResponseInternal, SwapRequest, SwapResponse};
 use thiserror::Error;
 use serde::Deserialize;
+use serde_json::Value;
 
 pub mod quote;
 pub mod route_plan_with_metadata;
@@ -50,7 +51,8 @@ async fn check_status_code_and_deserialize<T: DeserializeOwned>(
 
 #[derive(Debug, Deserialize)]
 pub struct HealthResponse {
-    pub status: String,
+    #[serde(flatten)]
+    pub data: Value,
 }
 
 impl JupiterSwapApiClient {
@@ -104,6 +106,11 @@ impl JupiterSwapApiClient {
             .get(format!("{}/health", self.base_path))
             .send()
             .await?;
-        check_status_code_and_deserialize(response).await
+        
+        // 直接解析响应，不检查状态码
+        response
+            .json::<HealthResponse>()
+            .await
+            .map_err(ClientError::DeserializationError)
     }
 }
