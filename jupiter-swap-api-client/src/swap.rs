@@ -66,8 +66,9 @@ pub mod base64_serialize_deserialize {
 
     use super::*;
     pub fn serialize<S: Serializer>(v: &Vec<u8>, s: S) -> Result<S::Ok, S::Error> {
-        let base58 = STANDARD.encode(v);
-        String::serialize(&base58, s)
+        let mut buf = String::with_capacity((v.len() * 4 + 2) / 3);
+        STANDARD.encode_string(v, &mut buf);
+        String::serialize(&buf, s)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
@@ -75,9 +76,11 @@ pub mod base64_serialize_deserialize {
         D: Deserializer<'de>,
     {
         let field_string = String::deserialize(deserializer)?;
+        let mut buf = Vec::with_capacity(field_string.len() * 3 / 4);
         STANDARD
-            .decode(field_string)
-            .map_err(|e| de::Error::custom(format!("base64 decoding error: {:?}", e)))
+            .decode_vec(field_string.as_bytes(), &mut buf)
+            .map_err(|e| de::Error::custom(format!("base64 decoding error: {:?}", e)))?;
+        Ok(buf)
     }
 }
 

@@ -1,17 +1,16 @@
 use {
     serde::{de, Deserialize, Deserializer, Serialize, Serializer},
-    std::str::FromStr,
+    std::{fmt::Display, str::FromStr},
 };
 
 pub fn serialize<T, S>(t: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
 where
-    T: ToString,
+    T: Display,
     S: Serializer,
 {
-    if let Some(t) = t {
-        t.to_string().serialize(serializer)
-    } else {
-        serializer.serialize_none()
+    match t {
+        Some(t) => serializer.collect_str(t),
+        None => serializer.serialize_none()
     }
 }
 

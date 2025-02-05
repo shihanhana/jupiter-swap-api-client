@@ -1,15 +1,15 @@
 use {
     serde::{de, Deserializer, Serializer},
     serde::{Deserialize, Serialize},
-    std::str::FromStr,
+    std::{fmt::Display, str::FromStr},
 };
 
 pub fn serialize<T, S>(t: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
-    T: ToString,
+    T: Display,
     S: Serializer,
 {
-    t.to_string().serialize(serializer)
+    serializer.collect_str(t)
 }
 
 pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>

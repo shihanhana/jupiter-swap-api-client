@@ -29,6 +29,8 @@ pub enum ClientError {
     },
     #[error("Failed to deserialize response: {0}")]
     DeserializationError(#[from] reqwest::Error),
+    #[error("Failed to parse JSON: {0}")]
+    JsonError(#[from] serde_json::Error),
 }
 
 async fn check_is_success(response: Response) -> Result<Response, ClientError> {
@@ -44,10 +46,8 @@ async fn check_status_code_and_deserialize<T: DeserializeOwned>(
     response: Response,
 ) -> Result<T, ClientError> {
     let response = check_is_success(response).await?;
-    response
-        .json::<T>()
-        .await
-        .map_err(ClientError::DeserializationError)
+    let bytes = response.bytes().await.map_err(ClientError::DeserializationError)?;
+    serde_json::from_slice(&bytes).map_err(ClientError::JsonError)
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,29 +98,31 @@ impl JupiterSwapApiClient {
         // 开始计时
         let start = std::time::Instant::now();
         
-        // 先构建请求
+        // 构建并执行请求
         let request = self.client
             .post(format!("{}/swap-instructions", self.base_path))
             .json(swap_request)
             .build()?;
             
-        // 打印请求信息
         println!("请求 URL: {}", request.url());
-        println!("请求体: {}", serde_json::to_string_pretty(swap_request).unwrap_or_default());
         
         // 发送请求
-        let response = self.client
-            .execute(request)
-            .await?;
+        let execute_start = std::time::Instant::now();
+        let response = self.client.execute(request).await?;
+        let execute_elapsed = execute_start.elapsed();
+        println!("请求执行耗时: {:.3} ms", execute_elapsed.as_micros() as f64 / 1000.0);
             
+        // 反序列化
+        let deserialize_start = std::time::Instant::now();
         let result = check_status_code_and_deserialize::<SwapInstructionsResponseInternal>(response)
             .await
             .map(Into::into);
+        let deserialize_elapsed = deserialize_start.elapsed();
+        println!("反序列化耗时: {:.3} ms", deserialize_elapsed.as_micros() as f64 / 1000.0);
             
-        // 计算耗时（转换为毫秒，保留3位小数）
-        let elapsed = start.elapsed();
-        let ms = elapsed.as_micros() as f64 / 1000.0;
-        println!("请求耗时: {:.3} ms", ms);
+        // 计算总耗时
+        let total_elapsed = start.elapsed();
+        println!("总耗时: {:.3} ms", total_elapsed.as_micros() as f64 / 1000.0);
         
         result
     }
