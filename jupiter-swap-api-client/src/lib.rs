@@ -62,45 +62,33 @@ pub struct HealthResponse {
 
 impl JupiterSwapApiClient {
     pub fn new(base_path: String) -> Self {
+        let client = Client::builder()
+            .pool_idle_timeout(Some(std::time::Duration::from_secs(30)))
+            .pool_max_idle_per_host(32) // 增加空闲连接数
+            .tcp_keepalive(Some(std::time::Duration::from_secs(60)))
+            .tcp_nodelay(true) // 禁用 Nagle 算法
+            .build()
+            .unwrap();
+
         Self { 
             base_path,
-            client: Client::new(),
+            client,
         }
     }
 
     pub async fn quote(&self, quote_request: &QuoteRequest) -> Result<QuoteResponse, ClientError> {
-        // 开始计时
-        let start = std::time::Instant::now();
-        
-        // 构建请求
         let url = format!("{}/quote", self.base_path);
         let extra_args = quote_request.quote_args.clone();
         let internal_quote_request = InternalQuoteRequest::from(quote_request.clone());
         
-        println!("请求 URL: {}", url);
-        
-        // 发送请求
-        let execute_start = std::time::Instant::now();
         let response = self.client
             .get(url)
             .query(&internal_quote_request)
             .query(&extra_args)
             .send()
             .await?;
-        let execute_elapsed = execute_start.elapsed();
-        println!("请求执行耗时: {:.3} ms", execute_elapsed.as_micros() as f64 / 1000.0);
-        
-        // 反序列化
-        let deserialize_start = std::time::Instant::now();
-        let result = check_status_code_and_deserialize(response).await;
-        let deserialize_elapsed = deserialize_start.elapsed();
-        println!("反序列化耗时: {:.3} ms", deserialize_elapsed.as_micros() as f64 / 1000.0);
-        
-        // 计算总耗时
-        let total_elapsed = start.elapsed();
-        println!("总耗时: {:.3} ms", total_elapsed.as_micros() as f64 / 1000.0);
-        
-        result
+            
+        check_status_code_and_deserialize(response).await
     }
 
     pub async fn swap(
@@ -121,24 +109,21 @@ impl JupiterSwapApiClient {
         &self,
         swap_request: &SwapRequest,
     ) -> Result<SwapInstructionsResponse, ClientError> {
-        // 开始计时
         let start = std::time::Instant::now();
         
-        // 构建并执行请求
-        let request = self.client
-            .post(format!("{}/swap-instructions", self.base_path))
-            .json(swap_request)
-            .build()?;
-            
-        println!("请求 URL: {}", request.url());
+        // 预先构建URL以避免运行时格式化
+        let url = format!("{}/swap-instructions", self.base_path);
         
-        // 发送请求
+        // 直接发送请求,避免build()和execute()的额外开销
         let execute_start = std::time::Instant::now();
-        let response = self.client.execute(request).await?;
+        let response = self.client
+            .post(&url)
+            .json(swap_request)
+            .send()
+            .await?;
         let execute_elapsed = execute_start.elapsed();
         println!("请求执行耗时: {:.3} ms", execute_elapsed.as_micros() as f64 / 1000.0);
             
-        // 反序列化
         let deserialize_start = std::time::Instant::now();
         let result = check_status_code_and_deserialize::<SwapInstructionsResponseInternal>(response)
             .await
@@ -146,7 +131,6 @@ impl JupiterSwapApiClient {
         let deserialize_elapsed = deserialize_start.elapsed();
         println!("反序列化耗时: {:.3} ms", deserialize_elapsed.as_micros() as f64 / 1000.0);
             
-        // 计算总耗时
         let total_elapsed = start.elapsed();
         println!("总耗时: {:.3} ms", total_elapsed.as_micros() as f64 / 1000.0);
         

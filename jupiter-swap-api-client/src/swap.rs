@@ -86,42 +86,31 @@ pub mod base64_serialize_deserialize {
 
 #[derive(Debug, Clone)]
 pub struct SwapInstructionsResponse {
-    pub token_ledger_instruction: Option<Instruction>,
-    pub compute_budget_instructions: Vec<Instruction>,
-    pub setup_instructions: Vec<Instruction>,
     /// Instruction performing the action of swapping
     pub swap_instruction: Instruction,
-    pub cleanup_instruction: Option<Instruction>,
-    /// Other instructions that should be included in the transaction.
-    /// Now, it should only have the Jito tip instruction.
-    pub other_instructions: Vec<Instruction>,
     pub address_lookup_table_addresses: Vec<Pubkey>,
-    pub prioritization_fee_lamports: u64,
-    pub compute_unit_limit: u32,
-    pub prioritization_type: Option<PrioritizationType>,
-    pub dynamic_slippage_report: Option<DynamicSlippageReport>,
-    pub simulation_error: Option<UiSimulationError>,
 }
 
 // Duplicate for deserialization
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SwapInstructionsResponseInternal {
-    token_ledger_instruction: Option<InstructionInternal>,
-    compute_budget_instructions: Vec<InstructionInternal>,
-    setup_instructions: Vec<InstructionInternal>,
     /// Instruction performing the action of swapping
     swap_instruction: InstructionInternal,
-    cleanup_instruction: Option<InstructionInternal>,
-    /// Other instructions that should be included in the transaction.
-    /// Now, it should only have the Jito tip instruction.
-    other_instructions: Vec<InstructionInternal>,
     address_lookup_table_addresses: Vec<PubkeyInternal>,
-    prioritization_fee_lamports: u64,
-    compute_unit_limit: u32,
-    prioritization_type: Option<PrioritizationType>,
-    dynamic_slippage_report: Option<DynamicSlippageReport>,
-    simulation_error: Option<UiSimulationError>,
+}
+
+impl From<SwapInstructionsResponseInternal> for SwapInstructionsResponse {
+    fn from(value: SwapInstructionsResponseInternal) -> Self {
+        Self {
+            swap_instruction: value.swap_instruction.into(),
+            address_lookup_table_addresses: value
+                .address_lookup_table_addresses
+                .into_iter()
+                .map(|p| p.0)
+                .collect(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -163,41 +152,6 @@ impl From<InstructionInternal> for Instruction {
             program_id: val.program_id,
             accounts: val.accounts.into_iter().map(Into::into).collect(),
             data: val.data,
-        }
-    }
-}
-
-impl From<SwapInstructionsResponseInternal> for SwapInstructionsResponse {
-    fn from(value: SwapInstructionsResponseInternal) -> Self {
-        Self {
-            token_ledger_instruction: value.token_ledger_instruction.map(Into::into),
-            compute_budget_instructions: value
-                .compute_budget_instructions
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            setup_instructions: value
-                .setup_instructions
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            swap_instruction: value.swap_instruction.into(),
-            cleanup_instruction: value.cleanup_instruction.map(Into::into),
-            other_instructions: value
-                .other_instructions
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            address_lookup_table_addresses: value
-                .address_lookup_table_addresses
-                .into_iter()
-                .map(|p| p.0)
-                .collect(),
-            prioritization_fee_lamports: value.prioritization_fee_lamports,
-            compute_unit_limit: value.compute_unit_limit,
-            prioritization_type: value.prioritization_type,
-            dynamic_slippage_report: value.dynamic_slippage_report,
-            simulation_error: value.simulation_error,
         }
     }
 }
