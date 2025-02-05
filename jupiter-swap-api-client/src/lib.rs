@@ -95,11 +95,21 @@ impl JupiterSwapApiClient {
         &self,
         swap_request: &SwapRequest,
     ) -> Result<SwapInstructionsResponse, ClientError> {
-        let response = self.client
+        // 先构建请求
+        let request = self.client
             .post(format!("{}/swap-instructions", self.base_path))
             .json(swap_request)
-            .send()
+            .build()?;
+            
+        // 打印请求信息
+        println!("请求 URL: {}", request.url());
+        println!("请求体: {}", serde_json::to_string_pretty(swap_request).unwrap_or_default());
+        
+        // 发送请求
+        let response = self.client
+            .execute(request)
             .await?;
+            
         check_status_code_and_deserialize::<SwapInstructionsResponseInternal>(response)
             .await
             .map(Into::into)
