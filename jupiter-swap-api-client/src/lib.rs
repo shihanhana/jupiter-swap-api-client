@@ -31,6 +31,8 @@ pub enum ClientError {
     DeserializationError(#[from] reqwest::Error),
     #[error("Failed to parse JSON: {0}")]
     JsonError(#[from] serde_json::Error),
+    #[error("Failed to parse JSON with SIMD: {0}")]
+    SimdJsonError(#[from] simd_json::Error),
 }
 
 async fn check_is_success(response: Response) -> Result<Response, ClientError> {
@@ -47,7 +49,9 @@ async fn check_status_code_and_deserialize<T: DeserializeOwned>(
 ) -> Result<T, ClientError> {
     let response = check_is_success(response).await?;
     let bytes = response.bytes().await.map_err(ClientError::DeserializationError)?;
-    serde_json::from_slice(&bytes).map_err(ClientError::JsonError)
+    let mut bytes_vec = bytes.to_vec();
+    simd_json::from_slice(&mut bytes_vec)
+        .map_err(ClientError::SimdJsonError)
 }
 
 #[derive(Debug, Deserialize)]
@@ -65,16 +69,38 @@ impl JupiterSwapApiClient {
     }
 
     pub async fn quote(&self, quote_request: &QuoteRequest) -> Result<QuoteResponse, ClientError> {
+        // 开始计时
+        let start = std::time::Instant::now();
+        
+        // 构建请求
         let url = format!("{}/quote", self.base_path);
         let extra_args = quote_request.quote_args.clone();
         let internal_quote_request = InternalQuoteRequest::from(quote_request.clone());
+        
+        println!("请求 URL: {}", url);
+        
+        // 发送请求
+        let execute_start = std::time::Instant::now();
         let response = self.client
             .get(url)
             .query(&internal_quote_request)
             .query(&extra_args)
             .send()
             .await?;
-        check_status_code_and_deserialize(response).await
+        let execute_elapsed = execute_start.elapsed();
+        println!("请求执行耗时: {:.3} ms", execute_elapsed.as_micros() as f64 / 1000.0);
+        
+        // 反序列化
+        let deserialize_start = std::time::Instant::now();
+        let result = check_status_code_and_deserialize(response).await;
+        let deserialize_elapsed = deserialize_start.elapsed();
+        println!("反序列化耗时: {:.3} ms", deserialize_elapsed.as_micros() as f64 / 1000.0);
+        
+        // 计算总耗时
+        let total_elapsed = start.elapsed();
+        println!("总耗时: {:.3} ms", total_elapsed.as_micros() as f64 / 1000.0);
+        
+        result
     }
 
     pub async fn swap(
