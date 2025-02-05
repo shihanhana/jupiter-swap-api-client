@@ -95,6 +95,9 @@ impl JupiterSwapApiClient {
         &self,
         swap_request: &SwapRequest,
     ) -> Result<SwapInstructionsResponse, ClientError> {
+        // 开始计时
+        let start = std::time::Instant::now();
+        
         // 先构建请求
         let request = self.client
             .post(format!("{}/swap-instructions", self.base_path))
@@ -110,9 +113,16 @@ impl JupiterSwapApiClient {
             .execute(request)
             .await?;
             
-        check_status_code_and_deserialize::<SwapInstructionsResponseInternal>(response)
+        let result = check_status_code_and_deserialize::<SwapInstructionsResponseInternal>(response)
             .await
-            .map(Into::into)
+            .map(Into::into);
+            
+        // 计算耗时（转换为毫秒，保留3位小数）
+        let elapsed = start.elapsed();
+        let ms = elapsed.as_micros() as f64 / 1000.0;
+        println!("请求耗时: {:.3} ms", ms);
+        
+        result
     }
 
     pub async fn health(&self) -> Result<HealthResponse, ClientError> {
